@@ -1,4 +1,4 @@
-@if (!showsProcessPaypal) {
+@if (showFormPaypal) {
     <div class="p-4">
         <h1 class="text-xl font-bold text-center mb-4">Integración de Pago con Paypal</h1>
         <form [formGroup]="paypalForm" (ngSubmit)="onSubmit()"class="space-y-4">
@@ -28,8 +28,20 @@
         </form>
     </div>
 } @else {
+    @if (procesando) {
     <div class="flex flex-col items-center justify-center h-full">
         <img src="loading-spinner.gif" alt="Procesando pago" class="mb-4">
         <p class="text-lg font-medium text-gray-700">Procesando pago...</p>
     </div>
+    } @else {
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+            <strong class="font-bold">¡Éxito!</strong>
+            <span class="block sm:inline">Tu pago con PayPal se procesó correctamente.</span>
+        </div>
+        <div class="mt-4">
+            <a (click)="onClose()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Cerrar
+            </a>
+        </div>
+    }
 }

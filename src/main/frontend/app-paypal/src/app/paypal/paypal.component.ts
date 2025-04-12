@@ -11,6 +11,10 @@ import { SafePipe } from './safe.pipe';
 import { Router } from '@angular/router';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { SharedDataService } from './shareddata.service';
+import { Observable, timer, Subject } from 'rxjs';
+import { switchMap, takeUntil } from 'rxjs/operators';
+
+const channel = new BroadcastChannel('succes-paypal-channel');
 
 @Component({
   selector: 'app-paypal',
@@ -21,14 +25,15 @@ import { SharedDataService } from './shareddata.service';
 })
 export class PaypalComponent {
 
-  apiUrl: string =  'http://localhost:8080/payment/create'; //
+  apiUrl: string =  'http://localhost:8080'; //
   
   http = inject(HttpClient);
   router = inject(Router);
   sharedDataService = inject(SharedDataService);
   cd = inject(ChangeDetectorRef);
 
-  showsProcessPaypal: boolean = false;
+  procesando: boolean = false;
+  showFormPaypal: boolean = true;
   urlApproval: string = '';
 
   fb = inject(FormBuilder);
@@ -39,29 +44,61 @@ export class PaypalComponent {
     description: ['', Validators.required],
   })
 
+  closeTimer$ = new Subject<any>();
+
   ngOnInit() {
     
-    const channel = new BroadcastChannel('succes-paypal-channel');
     channel.onmessage = (event) => {
-      if (event.data === 'closeSuccessPaypal') {
-        this.router.navigate(['']);
-        this.showsProcessPaypal = false; 
-        this.cd.detectChanges();
-      }
+      if (event.data.message === 'successPaypal') {
+        this.polling(event.data.paymentId, event.data.PayerID);
+        }
     };
+
+
   }
   
   onSubmit() {
 
-    this.http.post<PaypalResponse>(this.apiUrl, this.paypalForm.value ).subscribe((data) => {
+    this.http.post<PaypalResponse>(this.apiUrl+'/payment/create', this.paypalForm.value ).subscribe((data) => {
       if (data.approvalUrl) {
-        this.showsProcessPaypal = true;
+        this.procesando = true;
+        this.showFormPaypal = false;
         this.urlApproval = data.approvalUrl;
         window.open(data.approvalUrl ,"popup" ,"width=390,height=844");
       }
     });
 
-
   }
 
+  sendPolling(paymentId: string, PayerID: string): Observable<any> {
+    return this.http.get<any>(this.apiUrl+'/payment/success',{params: {paymentId, PayerID} });
+  }
+
+  onClose() {
+
+    this.showFormPaypal=true;
+    this.procesando=false;
+    this.cd.detectChanges();
+    
+  }
+
+  polling(paymentId: string, PayerID: string) {
+
+    this.sendPolling(paymentId, PayerID).subscribe((data: any) =>{
+      if (data["state"]=="approved") {
+        // <-- para las solicitudes de polling
+  
+        //this.router.navigate(['']);
+        this.showFormPaypal = false;        
+        this.procesando = false;                
+        this.closeTimer$.next(true);
+        this.cd.detectChanges();
+      
+      } else {
+        setTimeout(() =>{this.polling(paymentId, PayerID)}, 200);
+      }
+
+    });
+
+  }
 }

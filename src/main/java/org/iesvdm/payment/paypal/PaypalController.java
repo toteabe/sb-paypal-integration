@@ -60,6 +60,7 @@ public class PaypalController {
 
         } catch (PayPalRESTException e) {
             log.error("Error occurred:: ", e);
+            if (e.getMessage().contains("PAYMENT_ALREADY_DONE")) { return new ResponseEntity<>("{\"state\": \"approved\"}", HttpStatus.OK); }
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
