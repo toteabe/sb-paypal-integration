@@ -27,13 +27,22 @@
             </div>
         </form>
     </div>
-} @else {
-    @if (procesando) {
+} @else if (procesando) {
     <div class="flex flex-col items-center justify-center h-full">
         <img src="loading-spinner.gif" alt="Procesando pago" class="mb-4">
         <p class="text-lg font-medium text-gray-700">Procesando pago...</p>
     </div>
-    } @else {
+} @else if (cancelado) {
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">
+        <strong class="font-bold">¡Pago cancelado!</strong>
+        <span class="block sm:inline">El proceso de pago ha sido cancelado. Por favor, inténtelo nuevamente si lo desea.</span>
+    </div>
+    <div class="mt-4">
+        <a (click)="onClose()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Cerrar
+        </a>
+    </div>
+} @else {
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
             <strong class="font-bold">¡Éxito!</strong>
             <span class="block sm:inline">Tu pago con PayPal se procesó correctamente.</span>
@@ -43,5 +52,5 @@
                 Cerrar
             </a>
         </div>
-    }
 }
+

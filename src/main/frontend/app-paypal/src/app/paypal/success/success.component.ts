@@ -22,8 +22,6 @@ export class SuccessComponent {
   paymentId: string | null = null;
   PayerID: string | null = null;
 
-  closeTimer$ = new Subject<any>();
-
   ngOnInit() {
   
     //Necesario para leer los params en ngOnInit... :P

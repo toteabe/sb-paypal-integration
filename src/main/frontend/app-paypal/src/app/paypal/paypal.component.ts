@@ -32,6 +32,7 @@ export class PaypalComponent {
   sharedDataService = inject(SharedDataService);
   cd = inject(ChangeDetectorRef);
 
+  cancelado: boolean = false;
   procesando: boolean = false;
   showFormPaypal: boolean = true;
   urlApproval: string = '';
@@ -51,7 +52,12 @@ export class PaypalComponent {
     channel.onmessage = (event) => {
       if (event.data.message === 'successPaypal') {
         this.polling(event.data.paymentId, event.data.PayerID);
-        }
+      } else if (event.data.message === 'cancelPaypal') {
+        this.procesando = false;
+        this.showFormPaypal = false;
+        this.cancelado = true;
+        this.cd.detectChanges();
+      }
     };
 
 
@@ -91,7 +97,6 @@ export class PaypalComponent {
         //this.router.navigate(['']);
         this.showFormPaypal = false;        
         this.procesando = false;                
-        this.closeTimer$.next(true);
         this.cd.detectChanges();
       
       } else {
