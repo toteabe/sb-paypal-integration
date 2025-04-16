@@ -1,10 +1,12 @@
-package org.iesvdm.payment.paypal;
+package org.iesvdm.payment.paypal.service;
 
 import com.paypal.api.payments.*;
 import com.paypal.base.rest.APIContext;
 import com.paypal.base.rest.PayPalRESTException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -12,10 +14,9 @@ import java.util.List;
 import java.util.Locale;
 
 @Service
-@RequiredArgsConstructor
 public class PaypalService {
 
-    private final APIContext apiContext;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public Payment createPayment(
             BigDecimal total,

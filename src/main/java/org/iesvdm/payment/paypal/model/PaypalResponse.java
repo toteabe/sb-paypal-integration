@@ -1,4 +1,4 @@
-package org.iesvdm.payment.paypal;
+package org.iesvdm.payment.paypal.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

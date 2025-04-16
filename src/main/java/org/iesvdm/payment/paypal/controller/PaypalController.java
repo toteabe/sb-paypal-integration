@@ -1,4 +1,4 @@
-package org.iesvdm.payment.paypal;
+package org.iesvdm.payment.paypal.controller;
 
 import com.paypal.api.payments.Links;
 import com.paypal.api.payments.Payment;
@@ -6,12 +6,12 @@ import com.paypal.base.rest.PayPalRESTException;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.iesvdm.payment.paypal.model.PaypalRequest;
+import org.iesvdm.payment.paypal.model.PaypalResponse;
+import org.iesvdm.payment.paypal.service.PaypalService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.view.RedirectView;
 
 @RestController
 @RequiredArgsConstructor
