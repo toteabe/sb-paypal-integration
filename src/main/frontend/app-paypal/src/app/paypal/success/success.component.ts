@@ -26,10 +26,7 @@ export class SuccessComponent {
   
     //Necesario para leer los params en ngOnInit... :P
     setTimeout(()=>{
-      channel.postMessage({message: 'successPaypal', 
-        paymentId: this.route.snapshot.queryParamMap.get('paymentId'),
-        PayerID: this.route.snapshot.queryParamMap.get('PayerID')
-      });
+      channel.postMessage({message: 'successPaypal'});
       this.onClose();
 
     }, 100);

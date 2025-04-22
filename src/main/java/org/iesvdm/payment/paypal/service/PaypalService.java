@@ -1,70 +1,185 @@
 package org.iesvdm.payment.paypal.service;
 
-import com.paypal.api.payments.*;
-import com.paypal.base.rest.APIContext;
-import com.paypal.base.rest.PayPalRESTException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.iesvdm.payment.paypal.config.PaypalConfig;
+import org.iesvdm.payment.paypal.model.PaypalResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class PaypalService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    private final PaypalConfig paypalConfig;
 
-    public Payment createPayment(
-            BigDecimal total,
-            String currency,
-            String method,
-            String intent,
-            String description,
-            String cancelUrl,
-            String successUrl
-    ) throws PayPalRESTException {
-        Amount amount = new Amount();
-        amount.setCurrency(currency);
-        amount.setTotal(String.format(Locale.forLanguageTag(currency), "%.2f", total)); // 9.99$ - 9,99€
+    private String accessToken;
+    private LocalDateTime accessTokenExpiry = Instant.ofEpochMilli(0).atZone(ZoneId.systemDefault()).toLocalDateTime();
+    private ObjectMapper objectMapper = new ObjectMapper();
 
-        Transaction transaction = new Transaction();
-        transaction.setDescription(description);
-        transaction.setAmount(amount);
+    public String generateAccessToken() throws JsonProcessingException {
 
-        List<Transaction> transactions = new ArrayList<>();
-        transactions.add(transaction);
+        String uri = paypalConfig.getBaseUrl()+ "/v1/oauth2/token";
 
-        Payer payer = new Payer();
-        payer.setPaymentMethod(method);
+        HttpHeaders httpHeaders = new HttpHeaders() {
+            {
+                String auth = paypalConfig.getClientId() + ":" + paypalConfig.getClientSecret();
+                log.info(auth);
+                String encodedAuth =  java.util.Base64.getEncoder()
+                        .withoutPadding() //<<< OJO!
+                        .encodeToString(auth.getBytes(StandardCharsets.UTF_8));//<<< OJO!
 
-        Payment payment = new Payment();
-        payment.setIntent(intent);
-        payment.setPayer(payer);
-        payment.setTransactions(transactions);
+                String authHeader = "Basic " + encodedAuth;
+                log.info("authHeader {}", authHeader );
+                set( "Authorization", authHeader );
+                set( "Content-Type", "application/x-www-form-urlencoded");
+            }
+        };
 
-        RedirectUrls redirectUrls = new RedirectUrls();
-        redirectUrls.setCancelUrl(cancelUrl);
-        redirectUrls.setReturnUrl(successUrl);
+        LinkedMultiValueMap<String, Object> params = new LinkedMultiValueMap<>();
+        params.add("grant_type","client_credentials");
+        params.add("ignoreCache", true);
+        params.add("return_authn_schemes", true);
+        params.add("return_client_metadata", true);
+        params.add("return_unconsented_scopes", true);
 
-        payment.setRedirectUrls(redirectUrls);
+        ResponseEntity<String> res = restTemplate.exchange(uri, HttpMethod.POST,
+                new HttpEntity<>(params, httpHeaders), String.class);
 
-        return payment.create(apiContext);
+        JsonNode jsonNode = objectMapper.readTree(res.getBody());
+
+        this.accessToken = jsonNode.path("access_token").asText();
+        long expiresIn = jsonNode.path("expires_in").asLong();
+        this.accessTokenExpiry = LocalDateTime.now().plusSeconds(expiresIn);
+        String clientId = jsonNode.path("access_token_for").asText();
+
+        log.info("accesToken = {}",  accessToken);
+        log.info("expires_in = {}", expiresIn);
+        log.info("access_token_for = {}", clientId);
+
+        if (!jsonNode.path("client_metadata").isMissingNode()
+                && jsonNode.path("client_metadata").path("display_name").isValueNode()) {
+            log.info("Login en paypal mediante: {}", jsonNode.path("client_metadata")
+                    .path("display_name").asText()) ;
+        }
+
+        return this.accessToken;
+
     }
 
-    public Payment executePayment(
-            String paymentId,
-            String payerId
-    ) throws PayPalRESTException {
-        Payment payment = new Payment();
-        payment.setId(paymentId);
+    public PaypalResponse createOrder(String intent,
+                                      String currencyCode,
+                                      String value,
+                                      String returnUrl,
+                                      String cancelUrl
+                                ) throws JsonProcessingException {
 
-        PaymentExecution paymentExecution = new PaymentExecution();
-        paymentExecution.setPayerId(payerId);
+        if (LocalDateTime.now().isAfter(this.accessTokenExpiry.minusMinutes(20))) {
+            this.generateAccessToken();
+        }
 
-        return payment.execute(apiContext, paymentExecution);
+        String uri = paypalConfig.getBaseUrl()+ "/v2/checkout/orders";
+
+        HttpHeaders httpHeaders = new HttpHeaders() {
+            {
+                String authHeader = "Bearer " + accessToken;
+                log.info("authHeader {}", authHeader);
+                set( "Authorization", authHeader );
+                set( "Content-Type", "application/json");
+            }
+        };
+
+        String orderJson = String.format("""
+				{
+				    "intent": "%s",
+				    "purchase_units": [
+				        {
+				            "amount": {
+				                "currency_code": "%s",
+				                "value": "%s"
+				            }
+				        }
+				    ],
+				    "payment_source": {
+				        "paypal": {
+				            "experience_context": {
+				                "return_url": "%s",
+				                "cancel_url": "%s"
+				            }
+				        }
+				    }
+				}""", intent, currencyCode, value, returnUrl, cancelUrl);
+
+        log.info("order\n{}", orderJson);
+
+        ResponseEntity<String> res = restTemplate.exchange(uri, HttpMethod.POST,
+                new HttpEntity<>(orderJson, httpHeaders), String.class);
+
+        JsonNode jsonNode = objectMapper.readTree(res.getBody());
+
+        if (jsonNode.path("id").isMissingNode()) {
+            throw new IllegalArgumentException("Falta id en respuesta Paypal:\n" + jsonNode.toString());
+        }
+
+        String orderId  = jsonNode.path("id").asText();
+        log.info("orderId = {}", orderId);
+
+        JsonNode arrayLinks = jsonNode.path("links");
+
+        String href = null;
+        if (arrayLinks.isArray()) {
+
+            for (final JsonNode linkNode : arrayLinks) {
+
+                if (linkNode.path("rel").asText().equals("payer-action")) {
+                    href = linkNode.path("href").asText();
+                    break;
+                }
+
+            }
+
+        }
+
+        log.info("href {}", href);
+
+        return new PaypalResponse(href, orderId);
     }
+
+    public ResponseEntity<String> showOrderDetails(String orderId) throws JsonProcessingException {
+        String uri = paypalConfig.getBaseUrl()+ "/v2/checkout/orders/" + orderId;
+
+        HttpHeaders httpHeaders = new HttpHeaders() {
+            {
+                String authHeader = "Bearer " + accessToken;
+                log.info("authHeader {}", authHeader);
+                set( "Authorization", authHeader );
+            }
+        };
+
+        ResponseEntity<String> res = restTemplate.exchange(uri, HttpMethod.GET,
+                                                                    new HttpEntity<>(httpHeaders), String.class);
+
+        JsonNode jsonNode = objectMapper.readTree(res.getBody());
+
+        String status = jsonNode.path("status").asText();
+        log.info("status = {}",status);
+
+        return new ResponseEntity<String>(String.format("""
+                                                    {"state": "%s"}""", status), HttpStatus.OK);
+    }
+
 }

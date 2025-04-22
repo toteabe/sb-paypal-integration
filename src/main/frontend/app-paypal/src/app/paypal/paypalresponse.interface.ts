@@ -1,4 +1,4 @@
 export interface PaypalResponse {
-    ok: boolean;
-    approvalUrl: string;
+    href: string;
+    orderId: string;
 }

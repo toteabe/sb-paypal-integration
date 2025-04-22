@@ -1,16 +1,15 @@
 package org.iesvdm.payment.paypal.controller;
 
-import com.paypal.api.payments.Links;
-import com.paypal.api.payments.Payment;
-import com.paypal.base.rest.PayPalRESTException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.iesvdm.payment.paypal.model.PaypalRequest;
 import org.iesvdm.payment.paypal.model.PaypalResponse;
 import org.iesvdm.payment.paypal.service.PaypalService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,47 +22,26 @@ public class PaypalController {
 
     @PostMapping("/payment/create")
     public PaypalResponse createPayment(@RequestBody PaypalRequest paypalRequest
-    ) {
-        try {
+    ) throws JsonProcessingException {
+
             String cancelUrl = "http://localhost:4200/payment/cancel";
             String successUrl = "http://localhost:4200/payment/success";
-            Payment payment = paypalService.createPayment(
-                    paypalRequest.getAmount(),
-                    paypalRequest.getCurrency(),
-                    paypalRequest.getMethod(),
-                    "sale",
-                    paypalRequest.getDescription(),
-                    cancelUrl,
-                    successUrl
-            );
 
-            for (Links links: payment.getLinks()) {
-                if (links.getRel().equals("approval_url")) {
-                    return new PaypalResponse(true,links.getHref());
-                }
-            }
-        } catch (PayPalRESTException e) {
-            log.error("Error occurred:: ", e);
-        }
-        return new PaypalResponse(false, null);
+            return paypalService.createOrder("CAPTURE",
+                    paypalRequest.getCurrency(),
+                    paypalRequest.getAmount().toPlainString(),
+                    successUrl, cancelUrl);
+
     }
 
     @GetMapping("/payment/success")
     public ResponseEntity<String> paymentSuccess(
-            @RequestParam("paymentId") String paymentId,
-            @RequestParam("PayerID") String payerId
-    ) {
-        try {
-            Payment payment = paypalService.executePayment(paymentId, payerId);
+            @RequestParam("orderId") String orderId
+    ) throws JsonProcessingException {
 
-            return new ResponseEntity<>("{\"state\": \""+payment.getState()+"\"}", HttpStatus.OK);
-
-        } catch (PayPalRESTException e) {
-            log.error("Error occurred:: ", e);
-            if (e.getMessage().contains("PAYMENT_ALREADY_DONE")) { return new ResponseEntity<>("{\"state\": \"approved\"}", HttpStatus.OK); }
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
+        return this.paypalService.showOrderDetails(orderId);
 
     }
+
 
 }

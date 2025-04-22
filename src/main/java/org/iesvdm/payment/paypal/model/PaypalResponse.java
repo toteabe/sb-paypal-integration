@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class PaypalResponse {
 
-    private boolean ok;
-    private String approvalUrl;
-
+    private String href;
+    private String orderId;
 
 }

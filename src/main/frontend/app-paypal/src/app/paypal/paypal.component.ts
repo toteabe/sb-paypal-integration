@@ -36,6 +36,7 @@ export class PaypalComponent {
   procesando: boolean = false;
   showFormPaypal: boolean = true;
   urlApproval: string = '';
+  orderId: string = '';
 
   fb = inject(FormBuilder);
   paypalForm: FormGroup = this.fb.group({
@@ -51,7 +52,7 @@ export class PaypalComponent {
     
     channel.onmessage = (event) => {
       if (event.data.message === 'successPaypal') {
-        this.polling(event.data.paymentId, event.data.PayerID);
+        this.polling(this.orderId);
       } else if (event.data.message === 'cancelPaypal') {
         this.procesando = false;
         this.showFormPaypal = false;
@@ -66,18 +67,19 @@ export class PaypalComponent {
   onSubmit() {
 
     this.http.post<PaypalResponse>(this.apiUrl+'/payment/create', this.paypalForm.value ).subscribe((data) => {
-      if (data.approvalUrl) {
+      if (data.href) {        
         this.procesando = true;
         this.showFormPaypal = false;
-        this.urlApproval = data.approvalUrl;
-        window.open(data.approvalUrl ,"popup" ,"width=390,height=844");
+        this.orderId = data.orderId;
+        this.urlApproval = data.href;
+        window.open(data.href ,"popup" ,"width=390,height=844");
       }
     });
 
   }
 
-  sendPolling(paymentId: string, PayerID: string): Observable<any> {
-    return this.http.get<any>(this.apiUrl+'/payment/success',{params: {paymentId, PayerID} });
+  sendPolling(orderId: string): Observable<any> {
+    return this.http.get<any>(this.apiUrl+'/payment/success',{params: {orderId} });
   }
 
   onClose() {
@@ -88,10 +90,10 @@ export class PaypalComponent {
     
   }
 
-  polling(paymentId: string, PayerID: string) {
+  polling(orderId: string) {
 
-    this.sendPolling(paymentId, PayerID).subscribe((data: any) =>{
-      if (data["state"]=="approved") {
+    this.sendPolling(orderId).subscribe((data: any) =>{
+      if (data["state"]=="APPROVED") {
         // <-- para las solicitudes de polling
   
         //this.router.navigate(['']);
@@ -100,7 +102,7 @@ export class PaypalComponent {
         this.cd.detectChanges();
       
       } else {
-        setTimeout(() =>{this.polling(paymentId, PayerID)}, 200);
+        setTimeout(() =>{this.polling(orderId)}, 200);
       }
 
     });
